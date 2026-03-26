@@ -3,11 +3,12 @@ from sqlalchemy.orm import Session
 
 from app.models.database import get_db
 from app.models.review import Review
+from app.schemas.review import ReviewListResponse, ReviewResponse
 
 router = APIRouter()
 
 
-@router.get("/")
+@router.get("/", response_model=ReviewListResponse)
 def list_reviews(
     repo: str | None = None,
     status: str | None = None,
@@ -48,7 +49,7 @@ def list_reviews(
     }
 
 
-@router.get("/{review_id}")
+@router.get("/{review_id}", response_model=ReviewResponse)
 def get_review(review_id: int, db: Session = Depends(get_db)):
     """Get a single review by ID."""
     review = db.query(Review).filter(Review.id == review_id).first()

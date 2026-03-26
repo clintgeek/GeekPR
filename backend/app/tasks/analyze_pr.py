@@ -18,7 +18,9 @@ from app.models.job import Job
 @celery_app.task(
     bind=True,
     max_retries=3,
-    default_retry_delay=60,
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_backoff_max=300,
 )
 def analyze_pr_task(self, installation_id: int, repo_full_name: str, pr_number: int, pr_title: str):
     """
@@ -130,6 +132,16 @@ def analyze_pr_task(self, installation_id: int, repo_full_name: str, pr_number: 
         if job:
             job.status = "complete"
             db.commit()
+
+        # Publish update to Redis
+        try:
+            import redis
+            import json
+            from app.core.config import settings
+            r = redis.Redis.from_url(settings.redis_url)
+            r.publish("reviews_updates", json.dumps({"event": "reviews_updated", "pr_number": pr_number}))
+        except Exception as e:
+            print(f"Failed to publish to redis: {e}")
 
         return {"message": f"Analyzed {len(functions)} functions", "reviews": reviews_posted}
 
