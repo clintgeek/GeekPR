@@ -1,16 +1,17 @@
 import json
-from fastapi import APIRouter, Request, HTTPException
+from fastapi import APIRouter, Request, HTTPException, Depends
+from sqlalchemy.orm import Session
 
 from app.core.security import verify_webhook_signature
 from app.tasks.analyze_pr import analyze_pr_task
-from app.models.database import SessionLocal
+from app.models.database import get_db
 from app.models.job import Job
 
 router = APIRouter()
 
 
 @router.post("/github")
-async def handle_github_webhook(request: Request):
+async def handle_github_webhook(request: Request, db: Session = Depends(get_db)):
     """
     Receives GitHub webhook events for pull_request actions.
     Validates the signature, enqueues the analysis task, and returns 202.
@@ -51,18 +52,14 @@ async def handle_github_webhook(request: Request):
     )
 
     # 4. Save job record
-    db = SessionLocal()
-    try:
-        job = Job(
-            celery_task_id=task.id,
-            repo_full_name=repo_full_name,
-            pr_number=pr_number,
-            status="queued",
-        )
-        db.add(job)
-        db.commit()
-    finally:
-        db.close()
+    job = Job(
+        celery_task_id=task.id,
+        repo_full_name=repo_full_name,
+        pr_number=pr_number,
+        status="queued",
+    )
+    db.add(job)
+    db.commit()
 
     # 5. Return immediately
     return {"message": "Analysis enqueued", "task_id": task.id}

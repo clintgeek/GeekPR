@@ -6,37 +6,15 @@ import Sidebar from "@/components/Sidebar";
 import {
   GitPullRequest,
   AlertTriangle,
-  CheckCircle2,
   Clock,
   Loader2,
   ArrowUpRight,
   FileCode2,
   Shield,
 } from "lucide-react";
+import { priorityConfig, statusIcons } from "@/lib/constants";
 
-const priorityConfig: Record<string, { dot: string; badge: string; glow: string }> = {
-  High: {
-    dot: "bg-red-400",
-    badge: "bg-red-500/10 text-red-400 ring-red-500/20",
-    glow: "shadow-red-500/5",
-  },
-  Medium: {
-    dot: "bg-amber-400",
-    badge: "bg-amber-500/10 text-amber-400 ring-amber-500/20",
-    glow: "shadow-amber-500/5",
-  },
-  Low: {
-    dot: "bg-emerald-400",
-    badge: "bg-emerald-500/10 text-emerald-400 ring-emerald-500/20",
-    glow: "shadow-emerald-500/5",
-  },
-};
 
-const statusIcons: Record<string, any> = {
-  pending: Clock,
-  posted: CheckCircle2,
-  error: AlertTriangle,
-};
 
 export default function FeedPage() {
   const [data, setData] = useState<any>(null);
@@ -57,8 +35,23 @@ export default function FeedPage() {
     };
 
     fetchReviews();
-    const interval = setInterval(fetchReviews, 30000);
-    return () => clearInterval(interval);
+
+    // Setup WebSocket connection for real-time updates
+    const wsUrl = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8000/ws";
+    const ws = new WebSocket(wsUrl);
+
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.event === "reviews_updated") {
+          fetchReviews();
+        }
+      } catch (err) {
+        console.error("Failed to parse websocket message", err);
+      }
+    };
+
+    return () => ws.close();
   }, []);
 
   const reviews = data?.reviews || [];
