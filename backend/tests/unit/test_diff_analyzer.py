@@ -58,13 +58,12 @@ new file mode 100644
 index 0000000..1234567
 --- /dev/null
 +++ b/helpers.py
-@@ -0,0 +1,15 @@
+@@ -0,0 +1,5 @@
 +def func_a():
 +    return 1
 +
 +def func_b():
 +    return 2
-+
 """
     functions = extract_changed_functions(diff)
     assert len(functions) >= 2

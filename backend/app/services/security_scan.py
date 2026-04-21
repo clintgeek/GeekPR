@@ -11,7 +11,7 @@ from app.services.analyzers import SecurityIssue, get_analyzer_by_language
 __all__ = ["SecurityIssue", "run_security_scan", "run_bandit_scan"]
 
 
-def run_security_scan(source_code: str, language: str) -> list[SecurityIssue]:
+def run_security_scan(source_code: str, language: str = "python") -> list[SecurityIssue]:
     """
     Run the language's security scanner on source_code.
 

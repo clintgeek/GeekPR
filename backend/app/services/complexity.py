@@ -10,7 +10,7 @@ __all__ = ["ComplexityResult", "analyze_complexity"]
 
 def analyze_complexity(
     source_code: str,
-    language: str,
+    language: str = "python",
     threshold: int = 10,
 ) -> list[ComplexityResult]:
     """
