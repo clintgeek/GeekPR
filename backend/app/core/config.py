@@ -42,6 +42,33 @@ class Settings(BaseSettings):
     # code; the LLM does final triage and drops style-only concerns.
     default_cc_threshold: int = 15
 
+    # ─── Authentication (basegeek SSO) ──────────────────────────────────
+    # Tri-state:
+    #   "true"  — enforce basegeek session on every protected route
+    #   "false" — no in-process auth; operator MUST protect the service
+    #             upstream (nginx basic auth, VPN, mTLS, etc.)
+    #   unset   — app refuses to start (see main.py startup guard). This
+    #             is deliberate: no accidentally shipping a public API.
+    basegeek_auth_enabled: str | None = None
+
+    # basegeek's OpenAPI-compatible host. Used to verify sessions via
+    # GET {basegeek_base_url}/api/users/me.
+    basegeek_base_url: str = "https://basegeek.clintgeek.com"
+
+    # Login page URL the frontend redirects unauthenticated users to.
+    # basegeek appends ?token=... to the `redirect` param after login.
+    basegeek_login_url: str = "https://basegeek.clintgeek.com/"
+
+    # Cookie name basegeek sets for the access token. Domain is
+    # .clintgeek.com, so every subdomain (including geekpr.clintgeek.com)
+    # sees it automatically.
+    basegeek_session_cookie: str = "geek_token"
+
+    # How long (seconds) to cache a successful /api/users/me response
+    # per-token. Token TTL is 1h upstream; a short in-process cache
+    # keeps us from hitting basegeek on every single API call.
+    basegeek_session_cache_ttl: int = 60
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

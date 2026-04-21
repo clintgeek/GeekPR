@@ -100,10 +100,30 @@ See `DOCS/PHASE_6_GITHUB_SETUP.md` for detailed instructions on:
 3. Installing the app on repositories
 4. Testing with ngrok for local development
 
+### Authentication (basegeek SSO)
+
+geekPR has no built-in login system — it integrates with [baseGeek](https://basegeek.clintgeek.com)'s SSO when configured, and falls back to "bring your own protection" mode otherwise. The backend refuses to start unless `BASEGEEK_AUTH_ENABLED` is set explicitly to `true` or `false`, so you can't accidentally ship a public API.
+
+| `BASEGEEK_AUTH_ENABLED` | Behavior |
+|---|---|
+| `true` | Every protected API route validates the `geek_token` cookie against basegeek's `/api/users/me`. Frontend middleware redirects unauthenticated visitors to basegeek's login page. Any authenticated basegeek user is accepted. |
+| `false` | No in-process auth. Operator **must** protect the service upstream (nginx basic auth, VPN, mTLS, IP allowlist). Startup logs a loud warning. |
+| unset | App aborts at startup with a fatal message. |
+
+The webhook endpoint (`POST /api/webhook/github`) stays unauthenticated regardless — it relies on its GitHub HMAC signature check.
+
 ### Environment Variables
 
 **Backend** (`.env`):
 ```env
+# Authentication — REQUIRED
+BASEGEEK_AUTH_ENABLED=true
+BASEGEEK_BASE_URL=https://basegeek.clintgeek.com
+BASEGEEK_LOGIN_URL=https://basegeek.clintgeek.com/
+BASEGEEK_SESSION_COOKIE=geek_token
+BASEGEEK_SESSION_CACHE_TTL=60
+
+# GitHub App
 GITHUB_APP_ID=your-app-id
 GITHUB_PRIVATE_KEY_PATH=./keys/geekpr.pem
 GITHUB_WEBHOOK_SECRET=your-webhook-secret
@@ -114,7 +134,6 @@ DEFAULT_LLM_PROVIDER=aigeek
 # aiGeek — baseGeek's OpenAI-compatible proxy
 AIGEEK_BASE_URL=https://basegeek.clintgeek.com/openai/v1
 AIGEEK_API_KEY=bg_...
-# "<provider>/<model>" pins a specific backend for deterministic output.
 AIGEEK_DEFAULT_MODEL=anthropic/claude-sonnet-4-6
 
 # Direct OpenAI (testing only)
@@ -128,12 +147,16 @@ OLLAMA_MODEL=codellama
 
 REDIS_URL=redis://localhost:6379/0
 DATABASE_URL=sqlite:///./geekpr.db
-DEFAULT_CC_THRESHOLD=10
+DEFAULT_CC_THRESHOLD=15
 ```
 
 **Frontend** (`.env.local`):
 ```env
 NEXT_PUBLIC_API_URL=http://localhost:8000/api
+# Must match backend BASEGEEK_* or the two layers will disagree
+NEXT_PUBLIC_BASEGEEK_AUTH_ENABLED=true
+NEXT_PUBLIC_BASEGEEK_LOGIN_URL=https://basegeek.clintgeek.com/
+NEXT_PUBLIC_BASEGEEK_SESSION_COOKIE=geek_token
 ```
 
 ## Architecture

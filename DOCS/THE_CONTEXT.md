@@ -146,8 +146,32 @@ Quick reminders for anyone working on this.
 
 ---
 
+## Implementation Decision — basegeek SSO Integration (2026-04-21)
+
+**What we decided:**
+- geekPR integrates with baseGeek's SSO rather than building its own auth. Tri-state config (`BASEGEEK_AUTH_ENABLED=true|false|<unset>`); app refuses to start if unset so no one accidentally ships a public API. `true` enforces; `false` explicitly runs with no in-process auth and a loud warning (operator must protect upstream).
+- Backend: FastAPI dependency (`app/core/auth.require_basegeek_user`) reads the `geek_token` cookie, validates against `GET https://basegeek.clintgeek.com/api/users/me`, caches the successful `/me` response in-process for 60s per token. Applied as a router-level dependency so adding a new route is protected by default.
+- Frontend: Next.js middleware (`src/middleware.ts`) at the edge — checks the cookie, 302 to basegeek login if missing, before any page shell renders. No pre-auth flicker.
+- Webhook (`POST /api/webhook/github`) stays unauthenticated — its HMAC signature check is its auth, GitHub can't carry a basegeek cookie.
+
+**Why it matters:**
+- Dashboards, reviews, and jobs were all publicly visible before this. Drive-by attackers could read review contents across all repos and modify per-repo config via PUT.
+- Dogfoods the GeekSuite SSO platform — same login flow as notegeek/fitnessgeek/bujogeek. User lands at geekpr.clintgeek.com, gets bounced to basegeek, lands back at the dashboard signed in.
+
+**Design constraints:**
+- basegeek sets cookie `Domain=.clintgeek.com`, so every suite subdomain sees the session automatically. No separate login per app.
+- Cookie is `HttpOnly`, so JS can't read it — frontend calls `/api/auth/me` to get identity.
+- Refresh-token rotation is enforced upstream; geekPR doesn't manage refreshes (if the token expires mid-session, the /me call 401s and the frontend bounces back to login).
+- httpx timeout on the /me verify call is 5s; longer = DoS vector.
+
+**What to change if we ever want to support non-basegeek auth (e.g. Auth0):**
+- `app/core/auth.py` is the seam. Replace `_verify_with_basegeek` with an OIDC-capable verifier. Keep the dependency signature and cache intact — route modules won't need to change.
+
+---
+
 ## Last Updated
 
 - **2026-03-25**: Created as a living notebook for discoveries during implementation
 - **2026-03-25**: Added dual LLM provider decision (OpenAI + Ollama), Docker networking note
 - **2026-04-21**: Multi-language analyzer registry (JS/TS, Rust, Go); LLM default → aiGeek
+- **2026-04-21**: basegeek SSO integration with tri-state opt-out; webhook stays HMAC-only

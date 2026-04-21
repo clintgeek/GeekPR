@@ -34,6 +34,11 @@ jobs:
 
       - name: Run unit tests
         working-directory: backend
+        env:
+          # Startup gate requires an explicit value; tests exercise both
+          # code paths via direct imports + dependency_overrides, so the
+          # concrete value here just needs to be one of the accepted ones.
+          BASEGEEK_AUTH_ENABLED: "true"
         run: pytest tests/unit/ -v
 
       - name: Run integration tests
@@ -41,6 +46,7 @@ jobs:
         env:
           REDIS_URL: redis://localhost:6379/0
           DATABASE_URL: sqlite:///./test.db
+          BASEGEEK_AUTH_ENABLED: "true"
         run: pytest tests/integration/ -v
 
   frontend-build:

@@ -38,6 +38,12 @@ services:
       - "3001:3000"
     environment:
       NEXT_PUBLIC_API_URL: https://geekpr.clintgeek.com/api
+      # basegeek SSO wiring — these are read by src/middleware.ts at the
+      # edge to gate access to the dashboard. Keep in sync with the
+      # backend's BASEGEEK_* config or the two layers will disagree.
+      NEXT_PUBLIC_BASEGEEK_AUTH_ENABLED: "true"
+      NEXT_PUBLIC_BASEGEEK_LOGIN_URL: https://basegeek.clintgeek.com/
+      NEXT_PUBLIC_BASEGEEK_SESSION_COOKIE: geek_token
     depends_on:
       - backend
     volumes:
