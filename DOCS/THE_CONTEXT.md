@@ -116,7 +116,38 @@ Quick reminders for anyone working on this.
 
 ---
 
+## Implementation Decision — Language-Dispatched Analyzer Registry (2026-04-21)
+
+**What we decided:**
+- Extracted the Python-specific analyzer logic (function extraction, cyclomatic complexity via Radon, security via Bandit) behind an `Analyzer` protocol in `app/services/analyzers/`. Added JavaScript/TypeScript, Rust, and Go analyzers implementing the same protocol. Dispatch by file extension in `registry.py`; the pipeline in `analyze_pr.py` stays language-agnostic.
+
+**Why it matters:**
+- Made geekPR useful for more than just Python codebases (the original regex-based function extraction and Radon are Python-only). Also decoupled the pipeline from tool choice — swapping, say, ESLint for Biome in the JS analyzer is now a one-file change.
+
+**Design constraints:**
+- All non-Python analyzers shell out to external tools (eslint, cargo clippy, gocyclo, gosec). Every subprocess invocation fails-open — missing binary, timeout, or unparseable output returns `[]` rather than raising. This keeps the pipeline robust when a PR includes a language whose tool isn't installed on the analysis host.
+- Rust has no standard CC tool, so `RustAnalyzer.analyze_complexity` is a heuristic (counts `if`/`else if`/`while`/`for`/`loop`/`&&`/`||` plus `match` arms). Labeled as approximate in the module docstring.
+
+**How to add another language:** Drop a module in `analyzers/`, implement `extract_changed_functions` + `analyze_complexity` + `run_security_scan`, append an instance to `_ANALYZERS` in `registry.py`. No pipeline changes.
+
+---
+
+## Implementation Decision — LLM Default Switched to aiGeek (2026-04-21)
+
+**What we decided:**
+- Default LLM target is aiGeek (baseGeek's OpenAI-compatible proxy at `/openai/v1/chat/completions`). Direct OpenAI and Ollama paths remain for testing and local dev.
+- Default `llm_model` is `anthropic/claude-3-5-sonnet-20241022` — aiGeek's explicit provider-pinning syntax bypasses rotation, so each PR review runs on a single deterministic backend.
+
+**Why it matters:**
+- `instructor` (our Pydantic-validated response layer) needs `response_format: {type: "json_schema"}` to work reliably. aiGeek maps that to native tool-use forced-choice on Anthropic + `responseSchema` on Gemini, which means the round-trip works end-to-end without us writing any prompt-engineering workarounds. Non-Anthropic/Gemini providers fall back to aiGeek's prompt-injection + JSON-repair path.
+- aiGeek's rotation gives us "coding for free" on low-priority PR reviews without touching billable providers.
+
+**How to configure:** `AIGEEK_BASE_URL`, `AIGEEK_API_KEY` (`bg_<64-hex>` with `ai:call` permission), `AIGEEK_DEFAULT_MODEL` in `.env`. See `.env.example`.
+
+---
+
 ## Last Updated
 
 - **2026-03-25**: Created as a living notebook for discoveries during implementation
 - **2026-03-25**: Added dual LLM provider decision (OpenAI + Ollama), Docker networking note
+- **2026-04-21**: Multi-language analyzer registry (JS/TS, Rust, Go); LLM default → aiGeek

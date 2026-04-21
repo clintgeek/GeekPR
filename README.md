@@ -1,6 +1,8 @@
 # geekPR — The Autonomous Code Reviewer
 
-A self-hosted GitHub App that intercepts Pull Requests, performs static complexity analysis, and uses an LLM (OpenAI API or local Ollama) to suggest refactors for "smelly" code directly in PR comments.
+A self-hosted GitHub App that intercepts Pull Requests, performs static complexity + security analysis across **Python, JavaScript/TypeScript, Rust, and Go**, and uses an LLM to suggest refactors for flagged functions directly in PR comments.
+
+Default LLM target is [aiGeek](https://github.com/clintgeek/baseGeek/blob/main/apps/basegeek/DOCS/AIGEEK_USAGE.md) — baseGeek's OpenAI-compatible proxy that round-robins free-tier providers and handles structured-output translation on Anthropic + Gemini. Direct OpenAI and Ollama are supported as alternate/local paths.
 
 ## Quick Start
 
@@ -11,7 +13,20 @@ A self-hosted GitHub App that intercepts Pull Requests, performs static complexi
 - Docker & Docker Compose (optional, for containerized deployment)
 - Redis (for async task queue)
 - PostgreSQL (for production; SQLite for dev)
-- Ollama (for local LLM inference) **or** an OpenAI API key
+- An **aiGeek API key** (`bg_<64-hex>`) — or an OpenAI API key / local Ollama
+
+### Per-language tooling (optional — analyzers fail-open when missing)
+
+geekPR's external analyzers are invoked as subprocesses and fail-open if
+the tool isn't installed on the host, so you only need the ones whose
+languages you're reviewing:
+
+| Language | Complexity | Security |
+|---|---|---|
+| Python | `radon` (via `pip install radon`) | `bandit` |
+| JavaScript/TypeScript | `eslint` (built-in `complexity` rule) | `eslint-plugin-security` |
+| Rust | heuristic (branch-keyword count) | `cargo clippy` |
+| Go | `gocyclo` | `gosec` |
 
 ### Local Development (Without Docker)
 
@@ -93,15 +108,21 @@ GITHUB_APP_ID=your-app-id
 GITHUB_PRIVATE_KEY_PATH=./keys/geekpr.pem
 GITHUB_WEBHOOK_SECRET=your-webhook-secret
 
-# LLM Provider: "openai" or "ollama"
-DEFAULT_LLM_PROVIDER=ollama
+# LLM Provider: "aigeek" (default), "openai", or "ollama"
+DEFAULT_LLM_PROVIDER=aigeek
 
-# OpenAI API (or any OpenAI-compatible endpoint)
+# aiGeek — baseGeek's OpenAI-compatible proxy
+AIGEEK_BASE_URL=https://basegeek.clintgeek.com/openai/v1
+AIGEEK_API_KEY=bg_...
+# "<provider>/<model>" pins a specific backend for deterministic output.
+AIGEEK_DEFAULT_MODEL=anthropic/claude-3-5-sonnet-20241022
+
+# Direct OpenAI (testing only)
 OPENAI_API_KEY=sk-...
 OPENAI_BASE_URL=https://api.openai.com/v1
 OPENAI_MODEL=gpt-4o
 
-# Ollama (local LLM)
+# Ollama (local LLM — dev fallback)
 OLLAMA_BASE_URL=http://localhost:11434
 OLLAMA_MODEL=codellama
 
@@ -122,9 +143,13 @@ NEXT_PUBLIC_API_URL=http://localhost:8000/api
 - **FastAPI**: REST API and webhook listener
 - **Celery + Redis**: Async task queue for PR analysis
 - **SQLAlchemy**: Database ORM
-- **Radon**: Cyclomatic complexity analysis
-- **Bandit**: Security scanning
-- **Instructor + OpenAI/Ollama**: Structured LLM output (switchable per-repo)
+- **Language-dispatched analyzer registry** (`app/services/analyzers/`):
+  - Python — `radon` (cyclomatic complexity) + `bandit` (security)
+  - JavaScript/TypeScript — `eslint` complexity rule + `eslint-plugin-security`
+  - Rust — heuristic branch-count complexity + `cargo clippy` security lints
+  - Go — `gocyclo` + `gosec`
+  - Each analyzer is subprocess-based and fails open when the tool isn't on the PATH. Adding a new language = drop one module in `analyzers/` and register it.
+- **Instructor + aiGeek/OpenAI/Ollama**: Structured LLM output (switchable per-repo, Pydantic-validated).
 
 ### Frontend
 
