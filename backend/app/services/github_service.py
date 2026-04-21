@@ -121,3 +121,74 @@ def format_review_comment(
 
     comment += "\n---\n*geekPR triages production risks only — style and complexity feedback is intentionally filtered out.*"
     return comment
+
+
+# Marker embedded in every top-level geekPR comment so we can find and
+# delete previous ones when a PR gets re-analyzed. Keeps the PR
+# conversation to one current "all clear" instead of a stack per push.
+ALL_CLEAR_MARKER = "<!-- geekpr:all-clear -->"
+
+
+def format_all_clear_comment(
+    analyzed_count: int,
+    language_breakdown: dict[str, int],
+) -> str:
+    """Build the 'nothing to worry about' PR-level acknowledgement."""
+    if language_breakdown:
+        parts = ", ".join(f"{lang}: {n}" for lang, n in sorted(language_breakdown.items()))
+        breakdown = f" ({parts})"
+    else:
+        breakdown = ""
+
+    noun = "function" if analyzed_count == 1 else "functions"
+    return (
+        f"{ALL_CLEAR_MARKER}\n"
+        f"## ✓ geekPR — No production risks found\n\n"
+        f"Reviewed {analyzed_count} {noun}{breakdown}. All within acceptable "
+        f"complexity, no security / crash / data-loss / concurrency / "
+        f"correctness concerns flagged.\n\n"
+        f"---\n"
+        f"*geekPR flags only production-risk findings; style and complexity "
+        f"feedback is intentionally filtered out. Disable per-repo in Settings "
+        f"if the acknowledgement is noise.*"
+    )
+
+
+def clear_previous_all_clear_comments(
+    auth: GitHubAuth,
+    repo_full_name: str,
+    pr_number: int,
+) -> int:
+    """Delete any prior 'all clear' comments we posted on this PR.
+
+    Called before posting a fresh one so the PR conversation shows one
+    current acknowledgement per push instead of a stacked history.
+    Returns the number of comments deleted (useful for logging / tests).
+    """
+    issue = auth.client.get_repo(repo_full_name).get_issue(pr_number)
+    deleted = 0
+    for comment in issue.get_comments():
+        if ALL_CLEAR_MARKER in (comment.body or ""):
+            comment.delete()
+            deleted += 1
+    return deleted
+
+
+def post_all_clear_comment(
+    auth: GitHubAuth,
+    repo_full_name: str,
+    pr_number: int,
+    analyzed_count: int,
+    language_breakdown: dict[str, int],
+) -> None:
+    """Post a top-level 'no production risks found' comment.
+
+    Top-level = issue comment (attached to the PR conversation), not a
+    review comment (which lives on a specific line of a specific file).
+    The all-clear is about the PR as a whole, so it belongs in the
+    conversation.
+    """
+    clear_previous_all_clear_comments(auth, repo_full_name, pr_number)
+    body = format_all_clear_comment(analyzed_count, language_breakdown)
+    issue = auth.client.get_repo(repo_full_name).get_issue(pr_number)
+    issue.create_comment(body)

@@ -4,10 +4,11 @@ from app.services.complexity import analyze_complexity
 from app.services.security_scan import run_security_scan
 from app.services.llm import request_refactor
 from app.services.github_service import (
+    format_review_comment,
     get_github_client,
     get_pr_diff,
+    post_all_clear_comment,
     post_review_comment,
-    format_review_comment,
 )
 from app.models.database import SessionLocal
 from app.models.review import Review
@@ -49,6 +50,7 @@ def analyze_pr_task(self, installation_id: int, repo_full_name: str, pr_number: 
         llm_provider = repo_config.llm_provider if repo_config else None
         llm_model = repo_config.llm_model if repo_config else None
         auto_post = repo_config.auto_post if repo_config else True
+        post_all_clear = repo_config.post_all_clear if repo_config else True
 
         # 1. Get the diff from GitHub
         auth = get_github_client(installation_id)
@@ -64,6 +66,13 @@ def analyze_pr_task(self, installation_id: int, repo_full_name: str, pr_number: 
             return {"message": "No analyzable functions changed", "reviews": 0}
 
         reviews_posted = 0
+        # Track every function that reached the LLM triage stage so we can
+        # post a credible "reviewed N functions, nothing found" acknowledgement
+        # at the end if nothing serious surfaced. Functions below threshold
+        # (not flagged by static analysis) aren't counted — we didn't actually
+        # look at them.
+        analyzed_count = 0
+        language_counts: dict[str, int] = {}
 
         for func in functions:
             # 3. Check complexity — dispatched by language via registry
@@ -83,6 +92,8 @@ def analyze_pr_task(self, installation_id: int, repo_full_name: str, pr_number: 
 
             # 5. Call the LLM to triage each flagged function
             for result in flagged:
+                analyzed_count += 1
+                language_counts[func.language] = language_counts.get(func.language, 0) + 1
                 suggestion = request_refactor(
                     function_source=func.source_code,
                     complexity_score=result.score,
@@ -136,6 +147,29 @@ def analyze_pr_task(self, installation_id: int, repo_full_name: str, pr_number: 
                 reviews_posted += 1
 
         db.commit()
+
+        # "All clear" acknowledgement: we analyzed at least one function
+        # and nothing crossed the posting threshold. Only runs when the
+        # reviewer would have posted real comments (auto_post) and the
+        # repo opts into positive acknowledgements.
+        if (
+            post_all_clear
+            and auto_post
+            and reviews_posted == 0
+            and analyzed_count > 0
+        ):
+            try:
+                post_all_clear_comment(
+                    auth=auth,
+                    repo_full_name=repo_full_name,
+                    pr_number=pr_number,
+                    analyzed_count=analyzed_count,
+                    language_breakdown=language_counts,
+                )
+            except Exception as exc:
+                # Not worth failing the whole analysis for a comment post;
+                # real findings already landed. Log and move on.
+                print(f"Failed to post all-clear comment: {exc}")
 
         # Update job status
         if job:
