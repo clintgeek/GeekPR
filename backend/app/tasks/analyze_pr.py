@@ -51,8 +51,8 @@ def analyze_pr_task(self, installation_id: int, repo_full_name: str, pr_number: 
         auto_post = repo_config.auto_post if repo_config else True
 
         # 1. Get the diff from GitHub
-        gh = get_github_client(installation_id)
-        diff_text = get_pr_diff(gh, repo_full_name, pr_number)
+        auth = get_github_client(installation_id)
+        diff_text = get_pr_diff(auth, repo_full_name, pr_number)
 
         # 2. Extract changed functions
         functions = extract_changed_functions(diff_text)
@@ -105,7 +105,7 @@ def analyze_pr_task(self, installation_id: int, repo_full_name: str, pr_number: 
 
                 if auto_post:
                     post_review_comment(
-                        github_client=gh,
+                        auth=auth,
                         repo_full_name=repo_full_name,
                         pr_number=pr_number,
                         file_path=func.file_path,
