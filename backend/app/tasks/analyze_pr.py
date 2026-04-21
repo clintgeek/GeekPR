@@ -1,7 +1,7 @@
 from app.tasks.celery_app import celery_app
 from app.services.diff_analyzer import extract_changed_functions
 from app.services.complexity import analyze_complexity
-from app.services.security_scan import run_bandit_scan
+from app.services.security_scan import run_security_scan
 from app.services.llm import request_refactor
 from app.services.github_service import (
     get_github_client,
@@ -61,22 +61,24 @@ def analyze_pr_task(self, installation_id: int, repo_full_name: str, pr_number: 
             if job:
                 job.status = "complete"
                 db.commit()
-            return {"message": "No Python functions changed", "reviews": 0}
+            return {"message": "No analyzable functions changed", "reviews": 0}
 
         reviews_posted = 0
 
         for func in functions:
-            # 3. Check complexity
-            complexity_results = analyze_complexity(func.source_code, threshold=cc_threshold)
+            # 3. Check complexity — dispatched by language via registry
+            complexity_results = analyze_complexity(
+                func.source_code, language=func.language, threshold=cc_threshold
+            )
             flagged = [r for r in complexity_results if r.is_flagged]
 
             if not flagged:
                 continue
 
-            # 4. Security scan (optional)
+            # 4. Security scan (optional) — also dispatched by language
             security_issues = []
             if bandit_enabled:
-                issues = run_bandit_scan(func.source_code)
+                issues = run_security_scan(func.source_code, language=func.language)
                 security_issues = [f"[{i.test_id}] {i.description} (severity: {i.severity})" for i in issues]
 
             # 5. Call the LLM
