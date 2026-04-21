@@ -41,7 +41,7 @@ def get_llm_client(
         provider: "aigeek" (default), "openai", or "ollama". Falls back to
             settings.default_llm_provider.
         model: Model name override. For aigeek, can be "<provider>/<model>"
-            to pin a specific backend (e.g. "anthropic/claude-3-5-sonnet-20241022").
+            to pin a specific backend (e.g. "anthropic/claude-sonnet-4-6").
 
     Returns:
         (Instructor client, resolved model name).

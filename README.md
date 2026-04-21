@@ -115,7 +115,7 @@ DEFAULT_LLM_PROVIDER=aigeek
 AIGEEK_BASE_URL=https://basegeek.clintgeek.com/openai/v1
 AIGEEK_API_KEY=bg_...
 # "<provider>/<model>" pins a specific backend for deterministic output.
-AIGEEK_DEFAULT_MODEL=anthropic/claude-3-5-sonnet-20241022
+AIGEEK_DEFAULT_MODEL=anthropic/claude-sonnet-4-6
 
 # Direct OpenAI (testing only)
 OPENAI_API_KEY=sk-...

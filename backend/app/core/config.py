@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     # "<provider>/<model>" pins a specific provider per request (see
     # baseGeek/DOCS/AIGEEK_USAGE.md). Anthropic gives the most consistent
     # structured output via native tool-use translation.
-    aigeek_default_model: str = "anthropic/claude-3-5-sonnet-20241022"
+    aigeek_default_model: str = "anthropic/claude-sonnet-4-6"
 
     # OpenAI API direct (kept for testing against upstream OpenAI)
     openai_api_key: str = ""

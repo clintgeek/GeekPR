@@ -14,8 +14,8 @@ class RepoConfig(Base):
     # "aigeek" (default, routes through baseGeek proxy), "openai", or "ollama"
     llm_provider = Column(String, default="aigeek")
     # For aigeek, "<provider>/<model>" pins a specific backend. Default
-    # anthropic/claude-3-5-sonnet gives consistent structured output.
-    llm_model = Column(String, default="anthropic/claude-3-5-sonnet-20241022")
+    # anthropic/claude-sonnet-4-6 gives consistent structured output.
+    llm_model = Column(String, default="anthropic/claude-sonnet-4-6")
     auto_post = Column(Boolean, default=True)
     exclude_patterns = Column(Text, default="")
     created_at = Column(DateTime, server_default=func.now())
