@@ -102,21 +102,39 @@ def request_refactor(
     """
     client, resolved_model = get_llm_client(provider=provider, model=model)
 
-    fence, idioms = _LANGUAGE_HINTS.get(language, (language, f"idiomatic {language}"))
+    fence, _ = _LANGUAGE_HINTS.get(language, (language, ""))
 
-    prompt = f"""Act as a Staff Engineer performing a code review.
+    prompt = f"""You are the on-call engineer triaging a pull request at 2am.
+Your job is to flag things that would wake you up, NOT to improve readability.
 
-The following {language} function `{function_name}` has a complexity score of {complexity_score}, which exceeds the acceptable threshold.
+Return severity=NONE for anything that is only a style / complexity / SRP
+concern. Complex code is not a bug. Deep nesting is not a bug. A function
+being hard to read is not a bug. Save the severity levels for actual
+production risk.
+
+Flag severity=HIGH or severity=CRITICAL only if one of these is true:
+  - Security: injection (SQL, command, path), auth bypass, hardcoded
+    secret, unsanitized user input, broken crypto, TLS misuse.
+  - Crash: unhandled exception on realistic input, null/None deref,
+    unbounded recursion, resource leak (file/socket/lock never freed).
+  - Data loss: silent write failure, missing transaction boundary,
+    off-by-one that drops records, race that overwrites good data.
+  - Concurrency: TOCTOU, missing lock, shared-mutable-state bug, deadlock.
+  - Correctness: logic inverted, wrong branch, incorrect API usage that
+    will misbehave in production (not just "looks fragile").
+
+If you are unsure whether something is a real bug or just ugly code:
+severity=NONE. We would rather miss a subtle bug than fire twenty
+false alarms at a busy engineer.
+
+The complexity score ({complexity_score}) is just what surfaced this
+function for review. It is NOT itself a reason to flag.
+
+The {language} function `{function_name}`:
 
 ```{fence}
 {function_source}
 ```
-
-Refactor this function to be more modular, readable, and maintainable.
-Requirements:
-- Break complex conditionals into smaller helper functions.
-- Preserve the external behavior (don't change the function signature).
-- Follow {idioms}.
 """
 
     return client.chat.completions.create(

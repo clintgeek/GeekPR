@@ -59,9 +59,13 @@ jobs:
         working-directory: frontend
         run: npm run build
 
-      - name: Lint
-        working-directory: frontend
-        run: npm run lint
+      # `next lint` is deprecated as of Next.js 15 and prompts interactively
+      # in CI (exits 1 on no-tty). Re-enable once we migrate to the ESLint
+      # CLI with a committed config per:
+      # https://nextjs.org/docs/app/api-reference/config/eslint
+      # - name: Lint
+      #   working-directory: frontend
+      #   run: npm run lint
 
   docker-build:
     runs-on: ubuntu-latest
