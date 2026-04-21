@@ -6,6 +6,12 @@ celery_app = Celery(
     "geekpr",
     broker=settings.redis_url,
     backend=settings.redis_url,
+    # Explicit task-module imports. Celery's default autodiscover looks for
+    # a submodule literally named `tasks` inside each package, which doesn't
+    # match this layout (app.tasks.analyze_pr, not app.tasks.tasks). Without
+    # this the worker starts with zero registered tasks and rejects every
+    # incoming message as "unregistered task type".
+    include=["app.tasks.analyze_pr"],
 )
 
 celery_app.conf.update(
