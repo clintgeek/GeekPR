@@ -6,11 +6,13 @@ instance to _ANALYZERS. The registry derives both indexes automatically.
 """
 
 from app.services.analyzers.base import Analyzer
+from app.services.analyzers.javascript import JavaScriptAnalyzer
 from app.services.analyzers.python import PythonAnalyzer
 
 # Single source of truth for registered analyzers.
 _ANALYZERS: list[Analyzer] = [
     PythonAnalyzer(),
+    JavaScriptAnalyzer(),
 ]
 
 # Derived indexes.
