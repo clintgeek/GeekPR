@@ -1,8 +1,33 @@
+"""
+LLM client — structured refactor suggestions via aiGeek.
+
+Default target is aiGeek (baseGeek's OpenAI-compatible proxy). Because
+aiGeek accepts `response_format: {type: "json_schema", ...}` and maps it
+to native tool-use on Anthropic + responseSchema on Gemini, Instructor's
+Pydantic-validated round-trips work end-to-end without any additional
+prompt engineering on geekPR's side.
+
+`openai` and `ollama` paths are retained as direct-access fallbacks for
+local testing or cases where a specific provider is needed without
+going through aiGeek.
+"""
+
 import instructor
 from openai import OpenAI
 
 from app.core.config import settings
 from app.schemas.llm import RefactorSuggestion
+
+
+# Language → code-fence tag + reviewer persona hint. Used to shape the
+# prompt so the LLM gets the right syntactic cues for idiomatic
+# suggestions.
+_LANGUAGE_HINTS: dict[str, tuple[str, str]] = {
+    "python": ("python", "Pythonic idioms, PEP 8, type hints, Google-style docstrings"),
+    "javascript": ("javascript", "modern ES2020+ idioms, functional composition where natural, JSDoc for public functions"),
+    "rust": ("rust", "idiomatic Rust: ownership-aware, Result/Option over exceptions, rustdoc comments"),
+    "go": ("go", "idiomatic Go: early returns, small interfaces, GoDoc comments, explicit error handling"),
+}
 
 
 def get_llm_client(
@@ -13,26 +38,41 @@ def get_llm_client(
     Create an Instructor-patched OpenAI client for the chosen provider.
 
     Args:
-        provider: "openai" or "ollama". Falls back to settings.default_llm_provider.
-        model: Model name override. Falls back to the provider's default.
+        provider: "aigeek" (default), "openai", or "ollama". Falls back to
+            settings.default_llm_provider.
+        model: Model name override. For aigeek, can be "<provider>/<model>"
+            to pin a specific backend (e.g. "anthropic/claude-3-5-sonnet-20241022").
 
     Returns:
-        A tuple of (Instructor client, resolved model name).
+        (Instructor client, resolved model name).
     """
     provider = provider or settings.default_llm_provider
 
-    if provider == "openai":
+    if provider == "aigeek":
+        if not settings.aigeek_api_key:
+            raise RuntimeError(
+                "aigeek_api_key is empty — set AIGEEK_API_KEY in .env "
+                "(bg_<64-hex>) or switch default_llm_provider."
+            )
+        client = OpenAI(
+            api_key=settings.aigeek_api_key,
+            base_url=settings.aigeek_base_url,
+        )
+        resolved_model = model or settings.aigeek_default_model
+    elif provider == "openai":
         client = OpenAI(
             api_key=settings.openai_api_key,
             base_url=settings.openai_base_url,
         )
         resolved_model = model or settings.openai_model
-    else:
+    elif provider == "ollama":
         client = OpenAI(
             base_url=f"{settings.ollama_base_url}/v1",
             api_key="ollama",
         )
         resolved_model = model or settings.ollama_model
+    else:
+        raise ValueError(f"Unknown LLM provider: {provider}")
 
     return instructor.from_openai(client), resolved_model
 
@@ -41,6 +81,7 @@ def request_refactor(
     function_source: str,
     complexity_score: int,
     function_name: str,
+    language: str = "python",
     provider: str | None = None,
     model: str | None = None,
 ) -> RefactorSuggestion:
@@ -48,38 +89,39 @@ def request_refactor(
     Ask the LLM to suggest a refactor for a complex function.
 
     Args:
-        function_source: The full source code of the function.
-        complexity_score: The Cyclomatic Complexity score from Radon.
-        function_name: The name of the function.
-        provider: "openai" or "ollama". Falls back to env default.
-        model: Model name override. Falls back to the provider's default.
+        function_source: Full source of the function.
+        complexity_score: Cyclomatic complexity (or analyzer-specific score).
+        function_name: Name of the function.
+        language: Canonical language name from the analyzer ("python",
+            "javascript", "rust", "go"). Shapes the prompt and code fence.
+        provider: "aigeek" (default), "openai", or "ollama".
+        model: Model name or provider/model pin.
 
     Returns:
-        A RefactorSuggestion with structured fields.
+        A RefactorSuggestion validated against the Pydantic schema.
     """
     client, resolved_model = get_llm_client(provider=provider, model=model)
 
+    fence, idioms = _LANGUAGE_HINTS.get(language, (language, f"idiomatic {language}"))
+
     prompt = f"""Act as a Staff Engineer performing a code review.
 
-The following function `{function_name}` has a Cyclomatic Complexity score of {complexity_score}, which exceeds the acceptable threshold.
+The following {language} function `{function_name}` has a complexity score of {complexity_score}, which exceeds the acceptable threshold.
 
-```python
+```{fence}
 {function_source}
 ```
 
 Refactor this function to be more modular, readable, and maintainable.
 Requirements:
 - Break complex conditionals into smaller helper functions.
-- Add Type Hints to all parameters and return values.
-- Add a Google-style Docstring.
-- Keep the same external behavior (don't change the function signature).
+- Preserve the external behavior (don't change the function signature).
+- Follow {idioms}.
 """
 
-    response = client.chat.completions.create(
+    return client.chat.completions.create(
         model=resolved_model,
         response_model=RefactorSuggestion,
         messages=[{"role": "user", "content": prompt}],
         max_retries=2,
     )
-
-    return response

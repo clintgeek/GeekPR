@@ -11,8 +11,11 @@ class RepoConfig(Base):
     repo_full_name = Column(String, unique=True, index=True)
     cc_threshold = Column(Integer, default=10)
     bandit_enabled = Column(Boolean, default=True)
-    llm_provider = Column(String, default="ollama")    # "openai" or "ollama"
-    llm_model = Column(String, default="codellama")
+    # "aigeek" (default, routes through baseGeek proxy), "openai", or "ollama"
+    llm_provider = Column(String, default="aigeek")
+    # For aigeek, "<provider>/<model>" pins a specific backend. Default
+    # anthropic/claude-3-5-sonnet gives consistent structured output.
+    llm_model = Column(String, default="anthropic/claude-3-5-sonnet-20241022")
     auto_post = Column(Boolean, default=True)
     exclude_patterns = Column(Text, default="")
     created_at = Column(DateTime, server_default=func.now())

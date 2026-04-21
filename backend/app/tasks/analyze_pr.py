@@ -87,6 +87,7 @@ def analyze_pr_task(self, installation_id: int, repo_full_name: str, pr_number: 
                     function_source=func.source_code,
                     complexity_score=result.score,
                     function_name=result.function_name,
+                    language=func.language,
                     provider=llm_provider,
                     model=llm_model,
                 )
