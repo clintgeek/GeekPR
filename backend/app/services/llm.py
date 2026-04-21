@@ -123,5 +123,9 @@ Requirements:
         model=resolved_model,
         response_model=RefactorSuggestion,
         messages=[{"role": "user", "content": prompt}],
+        # Refactor suggestions include a full rewritten function plus
+        # explanation; 1000 tokens (aiGeek's default) truncates mid-reply
+        # and instructor rejects the incomplete tool_call.
+        max_tokens=4096,
         max_retries=2,
     )
