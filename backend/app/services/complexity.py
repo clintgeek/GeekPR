@@ -1,40 +1,33 @@
-from dataclasses import dataclass
+"""
+Top-level complexity analyzer — dispatches by language to the appropriate
+analyzer's analyze_complexity implementation.
+"""
 
-from radon.complexity import cc_visit
+from app.services.analyzers import ComplexityResult, get_analyzer_by_language
 
-
-@dataclass
-class ComplexityResult:
-    """Result of analyzing a function's cyclomatic complexity."""
-    function_name: str
-    score: int
-    rank: str
-    is_flagged: bool
+__all__ = ["ComplexityResult", "analyze_complexity"]
 
 
-def analyze_complexity(source_code: str, threshold: int = 10) -> list[ComplexityResult]:
+def analyze_complexity(
+    source_code: str,
+    language: str = "python",
+    threshold: int = 10,
+) -> list[ComplexityResult]:
     """
-    Calculate the Cyclomatic Complexity of all functions in the given source code.
+    Calculate complexity for all functions in the given source code,
+    using the analyzer registered for `language`.
 
     Args:
-        source_code: A string of Python source code.
-        threshold: Functions with CC above this are flagged.
+        source_code: Function source as a string.
+        language: Canonical language name from ChangedFunction.language.
+        threshold: Functions with score above this are flagged.
 
     Returns:
-        A list of ComplexityResult for every function found.
+        A list of ComplexityResult. Empty when the language has no
+        registered analyzer (unreachable under normal dispatch since
+        ChangedFunction is only produced by registered analyzers).
     """
-    try:
-        blocks = cc_visit(source_code)
-    except SyntaxError:
+    analyzer = get_analyzer_by_language(language)
+    if analyzer is None:
         return []
-
-    results = []
-    for block in blocks:
-        results.append(ComplexityResult(
-            function_name=block.name,
-            score=block.complexity,
-            rank=block.letter,
-            is_flagged=block.complexity > threshold,
-        ))
-
-    return results
+    return analyzer.analyze_complexity(source_code, threshold)
