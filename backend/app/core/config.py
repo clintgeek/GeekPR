@@ -36,8 +36,11 @@ class Settings(BaseSettings):
     # Database
     database_url: str = "sqlite:///./geekpr.db"
 
-    # Defaults
-    default_cc_threshold: int = 10
+    # Defaults — bumped from 10 because the reviewer is now severity-
+    # filtered (CRITICAL/HIGH only), and 10 was catching every non-
+    # trivial function for review. 15 still flags genuinely branchy
+    # code; the LLM does final triage and drops style-only concerns.
+    default_cc_threshold: int = 15
 
     class Config:
         env_file = ".env"
