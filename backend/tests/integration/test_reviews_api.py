@@ -4,6 +4,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.core.auth import require_basegeek_user
 from app.main import app
 from app.models.database import Base, get_db
 from app.models.review import Review
@@ -24,7 +25,14 @@ def override_get_db():
     finally:
         db.close()
 
+async def override_auth():
+    """Bypass basegeek SSO in tests — return a fixed synthetic user.
+    Real session verification is covered by its own unit tests."""
+    return {"id": "test-user", "username": "tester", "email": "t@example.com"}
+
+
 app.dependency_overrides[get_db] = override_get_db
+app.dependency_overrides[require_basegeek_user] = override_auth
 
 client = TestClient(app)
 
