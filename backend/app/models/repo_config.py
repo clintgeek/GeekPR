@@ -17,6 +17,10 @@ class RepoConfig(Base):
     # anthropic/claude-sonnet-4-6 gives consistent structured output.
     llm_model = Column(String, default="anthropic/claude-sonnet-4-6")
     auto_post = Column(Boolean, default=True)
+    # Post an "all clear" top-level comment when the reviewer analyzed ≥1
+    # function and flagged nothing HIGH/CRITICAL. Flip off per-repo if the
+    # positive acknowledgement is noise rather than signal for that team.
+    post_all_clear = Column(Boolean, default=True)
     exclude_patterns = Column(Text, default="")
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, onupdate=func.now())

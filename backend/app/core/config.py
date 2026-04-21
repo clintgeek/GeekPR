@@ -45,6 +45,11 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
+        # Tolerate extra .env keys that aren't declared on this Settings
+        # class — lets a working-copy .env include variables for branches
+        # that haven't merged yet (e.g. feature branches adding new config)
+        # without breaking tests on branches that don't know about them.
+        extra = "ignore"
 
 
 settings = Settings()
