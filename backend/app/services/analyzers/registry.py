@@ -6,6 +6,7 @@ instance to _ANALYZERS. The registry derives both indexes automatically.
 """
 
 from app.services.analyzers.base import Analyzer
+from app.services.analyzers.go import GoAnalyzer
 from app.services.analyzers.javascript import JavaScriptAnalyzer
 from app.services.analyzers.python import PythonAnalyzer
 from app.services.analyzers.rust import RustAnalyzer
@@ -15,6 +16,7 @@ _ANALYZERS: list[Analyzer] = [
     PythonAnalyzer(),
     JavaScriptAnalyzer(),
     RustAnalyzer(),
+    GoAnalyzer(),
 ]
 
 # Derived indexes.
