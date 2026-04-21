@@ -81,7 +81,7 @@ def analyze_pr_task(self, installation_id: int, repo_full_name: str, pr_number: 
                 issues = run_security_scan(func.source_code, language=func.language)
                 security_issues = [f"[{i.test_id}] {i.description} (severity: {i.severity})" for i in issues]
 
-            # 5. Call the LLM
+            # 5. Call the LLM to triage each flagged function
             for result in flagged:
                 suggestion = request_refactor(
                     function_source=func.source_code,
@@ -92,14 +92,20 @@ def analyze_pr_task(self, installation_id: int, repo_full_name: str, pr_number: 
                     model=llm_model,
                 )
 
-                # 6. Format and post comment
+                # Only post critical / high severity — anything else is
+                # noise for a busy reviewer. Style and complexity-for-its-
+                # own-sake concerns are intentionally dropped here.
+                if suggestion.severity.value not in ("critical", "high"):
+                    continue
+
                 comment_body = format_review_comment(
                     function_name=result.function_name,
-                    complexity_score=result.score,
-                    suggestion_summary=suggestion.summary,
-                    refactored_code=suggestion.refactored_code,
+                    language=func.language,
+                    severity=suggestion.severity.value,
+                    issue_type=suggestion.issue_type.value,
+                    summary=suggestion.summary,
+                    suggested_fix=suggestion.suggested_fix,
                     explanation=suggestion.explanation,
-                    priority=suggestion.priority,
                     security_issues=security_issues if security_issues else None,
                 )
 
@@ -123,7 +129,7 @@ def analyze_pr_task(self, installation_id: int, repo_full_name: str, pr_number: 
                     line_number=func.start_line,
                     complexity_score=result.score,
                     suggestion=comment_body,
-                    priority=suggestion.priority,
+                    priority=suggestion.severity.value,
                     status="posted" if auto_post else "pending",
                 )
                 db.add(review)
