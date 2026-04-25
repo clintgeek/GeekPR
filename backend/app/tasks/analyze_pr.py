@@ -8,6 +8,7 @@ from app.services.github_service import (
     get_github_client,
     get_pr_diff,
     post_all_clear_comment,
+    post_nothing_to_scan_comment,
     post_review_comment,
 )
 from app.models.database import SessionLocal
@@ -60,6 +61,16 @@ def analyze_pr_task(self, installation_id: int, repo_full_name: str, pr_number: 
         functions = extract_changed_functions(diff_text)
 
         if not functions:
+            if post_all_clear and auto_post:
+                try:
+                    post_nothing_to_scan_comment(
+                        auth=auth,
+                        repo_full_name=repo_full_name,
+                        pr_number=pr_number,
+                        function_count=0,
+                    )
+                except Exception as exc:
+                    print(f"Failed to post nothing-to-scan comment: {exc}")
             if job:
                 job.status = "complete"
                 db.commit()
@@ -148,6 +159,25 @@ def analyze_pr_task(self, installation_id: int, repo_full_name: str, pr_number: 
 
         db.commit()
 
+        # "Nothing to scan" acknowledgement: functions were changed but
+        # none exceeded the complexity threshold, so no LLM triage ran.
+        if (
+            post_all_clear
+            and auto_post
+            and reviews_posted == 0
+            and analyzed_count == 0
+            and functions
+        ):
+            try:
+                post_nothing_to_scan_comment(
+                    auth=auth,
+                    repo_full_name=repo_full_name,
+                    pr_number=pr_number,
+                    function_count=len(functions),
+                )
+            except Exception as exc:
+                print(f"Failed to post nothing-to-scan comment: {exc}")
+
         # "All clear" acknowledgement: we analyzed at least one function
         # and nothing crossed the posting threshold. Only runs when the
         # reviewer would have posted real comments (auto_post) and the
@@ -194,7 +224,11 @@ def analyze_pr_task(self, installation_id: int, repo_full_name: str, pr_number: 
             job.status = "failed"
             job.error_message = str(exc)
             db.commit()
-        raise self.retry(exc=exc)
+        # Re-raise the original exception; Celery's autoretry_for
+        # wrapper schedules retries.  Calling self.retry() here
+        # would recurse infinitely when max_retries is exhausted
+        # because MaxRetriesExceededError is itself an Exception.
+        raise
 
     finally:
         db.close()
