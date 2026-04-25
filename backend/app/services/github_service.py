@@ -127,6 +127,7 @@ def format_review_comment(
 # delete previous ones when a PR gets re-analyzed. Keeps the PR
 # conversation to one current "all clear" instead of a stack per push.
 ALL_CLEAR_MARKER = "<!-- geekpr:all-clear -->"
+NOTHING_TO_SCAN_MARKER = "<!-- geekpr:nothing-to-scan -->"
 
 
 def format_all_clear_comment(
@@ -190,5 +191,58 @@ def post_all_clear_comment(
     """
     clear_previous_all_clear_comments(auth, repo_full_name, pr_number)
     body = format_all_clear_comment(analyzed_count, language_breakdown)
+    issue = auth.client.get_repo(repo_full_name).get_issue(pr_number)
+    issue.create_comment(body)
+
+
+def format_nothing_to_scan_comment(function_count: int) -> str:
+    """Build the 'nothing complex enough to warrant LLM triage' comment."""
+    if function_count == 0:
+        detail = (
+            "No function-level changes were detected in this PR — the diff "
+            "may contain only docs, config, assets, or unsupported file types. "
+            "No analysis was run."
+        )
+    else:
+        noun = "function" if function_count == 1 else "functions"
+        detail = (
+            f"Found {function_count} changed {noun}, but none exceeded the "
+            f"complexity threshold for deeper review. No LLM triage was run."
+        )
+    return (
+        f"{NOTHING_TO_SCAN_MARKER}\n"
+        f"## ⊘ geekPR — Nothing to scan\n\n"
+        f"{detail}\n\n"
+        f"---\n"
+        f"*geekPR only scans functions that static analysis flags as "
+        f"sufficiently complex or risky. Adjust the per-repo complexity "
+        f"threshold in Settings if you'd like broader coverage.*"
+    )
+
+
+def clear_previous_nothing_to_scan_comments(
+    auth: GitHubAuth,
+    repo_full_name: str,
+    pr_number: int,
+) -> int:
+    """Delete any prior 'nothing to scan' comments we posted on this PR."""
+    issue = auth.client.get_repo(repo_full_name).get_issue(pr_number)
+    deleted = 0
+    for comment in issue.get_comments():
+        if NOTHING_TO_SCAN_MARKER in (comment.body or ""):
+            comment.delete()
+            deleted += 1
+    return deleted
+
+
+def post_nothing_to_scan_comment(
+    auth: GitHubAuth,
+    repo_full_name: str,
+    pr_number: int,
+    function_count: int,
+) -> None:
+    """Post a top-level 'nothing complex enough to scan' comment."""
+    clear_previous_nothing_to_scan_comments(auth, repo_full_name, pr_number)
+    body = format_nothing_to_scan_comment(function_count)
     issue = auth.client.get_repo(repo_full_name).get_issue(pr_number)
     issue.create_comment(body)
