@@ -49,13 +49,9 @@ def generate_signature(payload_bytes: bytes, secret: str) -> str:
     ).hexdigest()
     return f"sha256={hash_value}"
 
-@patch("app.api.webhook.analyze_pr_task.delay")
-def test_valid_webhook_enqueues_task(mock_delay):
-    # Mock task ID response
-    class MockTask:
-        id = "mock-task-id"
-    mock_delay.return_value = MockTask()
-
+@patch("app.api.webhook.analyze_pr_task.apply_async")
+def test_valid_webhook_enqueues_task(mock_apply_async):
+    # The webhook generates its own UUID, so we just verify apply_async is called correctly
     payload = {
         "action": "opened",
         "pull_request": {"number": 123, "title": "Test PR"},
@@ -72,21 +68,29 @@ def test_valid_webhook_enqueues_task(mock_delay):
     )
 
     assert response.status_code == 200
-    assert response.json() == {"message": "Analysis enqueued", "task_id": "mock-task-id"}
+    response_data = response.json()
+    assert response_data["message"] == "Analysis enqueued"
+    # The task_id should be a valid UUID string returned in the response
+    returned_task_id = response_data["task_id"]
+    assert returned_task_id, "task_id should not be empty"
 
-    # Verify task was enqueued
-    mock_delay.assert_called_once_with(
-        installation_id=1,
-        repo_full_name="test/repo",
-        pr_number=123,
-        pr_title="Test PR"
-    )
+    # Verify apply_async was called with the correct parameters
+    mock_apply_async.assert_called_once()
+    call_kwargs = mock_apply_async.call_args[1]
+    assert "task_id" in call_kwargs
+    assert call_kwargs["task_id"] == returned_task_id
+    assert call_kwargs["kwargs"]["installation_id"] == 1
+    assert call_kwargs["kwargs"]["repo_full_name"] == "test/repo"
+    assert call_kwargs["kwargs"]["pr_number"] == 123
+    assert call_kwargs["kwargs"]["pr_title"] == "Test PR"
 
-    # Verify DB state
+    # Verify DB state - the job should exist with the generated UUID
     db = TestingSessionLocal()
-    job = db.query(Job).filter_by(celery_task_id="mock-task-id").first()
+    job = db.query(Job).filter_by(celery_task_id=returned_task_id).first()
     assert job is not None
     assert job.status == "queued"
+    assert job.repo_full_name == "test/repo"
+    assert job.pr_number == 123
     db.close()
 
 
