@@ -51,10 +51,9 @@ def generate_signature(payload_bytes: bytes, secret: str) -> str:
 
 @patch("app.api.webhook.analyze_pr_task.delay")
 def test_valid_webhook_enqueues_task(mock_delay):
-    # Mock task ID response
-    class MockTask:
-        id = "mock-task-id"
-    mock_delay.return_value = MockTask()
+    # Mock task ID response - ensure the mock's id attribute is accessible
+    mock_task = mock_delay.return_value
+    mock_task.id = "mock-task-id"
 
     payload = {
         "action": "opened",
